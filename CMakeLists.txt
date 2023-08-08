@@ -40,7 +40,7 @@ ament_python_install_package(${PROJECT_NAME})
 
 # Install Python executables
 install(PROGRAMS
-  nodes/vision_ekf_node
+  nodes/acoustic_ekf_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

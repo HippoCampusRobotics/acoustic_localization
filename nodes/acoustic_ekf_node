@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+import rclpy
+from rcl_interfaces.msg import (ParameterDescriptor, ParameterType)
+from rclpy.node import Node
+from rclpy.duration import Duration
+import tf_transformations
+import tf2_geometry_msgs
+from geometry_msgs.msg import TransformStamped
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+
+from geometry_msgs.msg import PoseStamped
+from nav_msgs.msg import Odometry
+from hippo_msgs.msg import ModemOut
+
+from acoustic_localization.ekf import AcousticEkf
+
+import numpy as np
+import threading
+import json
+
+
+class AcousticEkfNode(Node):
+
+    def __init__(self, node_name):
+        super().__init__(node_name=node_name)
+
+        self.declare_parameter('acoustic_config_path',
+                               rclpy.Parameter.Type.STRING)
+        self.acoustic_config_path = str(
+            self.get_parameter('acoustic_config_path').value)
+        f = open(self.acoustic_config_path)
+        self.acoustic_config = json.load(f)
+        f.close()
+
+        self.declare_parameter('estimator_config_path')
+        self.estimator_config_path = str(
+            self.get_parameter('estimator_config_path').value)
+        f = open(self.acoustic_config_path)
+        self.estimator_config = json.load(f)
+        f.close()
+
+        self.anchor_positions = []
+
+        self.estimator = AcousticEkf()
+
+        self.lock = threading.RLock()
+
+        self.rate = 30.0
+
+        self.t_last = self.get_clock.now()
+
+        self.modem_sub = self.create_subscription(ModemOut,
+                                                  'modems',
+                                                  self.on_modem,
+                                                  qos_profile=1)
+
+        self.odometry_sub = self.create_subscription(Odometry,
+                                                     'odometry',
+                                                     self.on_odometry,
+                                                     qos_profile=1)
+
+        self.predict_timer = self.create_timer(
+            timer_period_sec=(1 / self.rate), callback=self.simulate_acoustics)
+
+    def on_modem(self, msg: ModemOut):
+        measurement = [msg.distance, msg.id]
+        anchor_position = np.asarray(self.anchor_positions[msg.id]).reshape(
+            (-1, 1))
+        t = msg.header.stamp
+        dt = t - self.t_last
+
+        self.estimator.predict(dt)
+        self.estimator.update(measurement)
+        self.t_last = t
+
+    def on_odometry(self, msg: Odometry):
+        pass
+
+
+def main():
+    rclpy.init()
+    node = AcousticEkfNode("acoustic_ekf_node")
+    rclpy.spin(node)
+
+
+if __name__ == "__main__":
+    main()

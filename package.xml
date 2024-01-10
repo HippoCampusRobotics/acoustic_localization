@@ -28,8 +28,6 @@
   <depend>hippo_msgs</depend>
   <depend>std_srvs</depend>
   <depend>tf_transformations</depend>
-  <exec_depend>ros2_launch</exec_depend>
-
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
